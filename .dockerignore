@@ -1,0 +1,13 @@
+.env
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+tests/
+alembic/versions/
+.git/
+.gitignore
+.agents/
+.claude/
+.windsurf/
