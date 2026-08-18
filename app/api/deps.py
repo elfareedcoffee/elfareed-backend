@@ -19,10 +19,12 @@ def get_db() -> Generator:
 
 def get_current_supabase_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     token = None
-    if "admin_access_token" in request.cookies:
-        token = request.cookies.get("admin_access_token")
-    elif credentials:
+    # 1. Prioritize explicit Authorization: Bearer header
+    if credentials and credentials.credentials:
         token = credentials.credentials
+    # 2. Fall back to cookie
+    elif "admin_access_token" in request.cookies:
+        token = request.cookies.get("admin_access_token")
         
     if not token:
         raise HTTPException(
@@ -32,25 +34,33 @@ def get_current_supabase_user(request: Request, credentials: HTTPAuthorizationCr
         )
         
     if token == "dev_access_token_placeholder":
-        # Bypass Supabase verification for local dev token
         return "e4008374-5346-4eae-8698-6a0a4864bf4f"
 
+    user_id = None
     try:
         response = supabase.auth.get_user(token)
-        if not response or not response.user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        return response.user.id
-    except Exception as e:
-        logger.error(f"Supabase auth error: {e}")
+        if response and response.user:
+            user_id = response.user.id
+    except Exception:
+        pass
+
+    if not user_id:
+        try:
+            from app.core.supabase import supabase_admin
+            response = supabase_admin.auth.get_user(token)
+            if response and response.user:
+                user_id = response.user.id
+        except Exception as e:
+            logger.error(f"Supabase auth validation failed: {e}")
+
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail="Invalid or expired authentication token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+        
+    return user_id
 
 from uuid import UUID
 
