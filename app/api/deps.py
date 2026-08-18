@@ -34,7 +34,7 @@ def get_current_supabase_user(request: Request, credentials: HTTPAuthorizationCr
         )
         
     if token == "dev_access_token_placeholder":
-        return "e4008374-5346-4eae-8698-6a0a4864bf4f"
+        return "2317f4a2-a268-47c7-8cd9-e90a38cad9a4"
 
     user_id = None
     try:
