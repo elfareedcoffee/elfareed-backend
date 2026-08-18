@@ -35,23 +35,21 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    if settings.ALLOWED_ORIGINS:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.ALLOWED_ORIGINS,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-    else:
-        # Default restricted fallback if nothing configured
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=[], # Will fail CORS
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+    cors_origins = settings.ALLOWED_ORIGINS if settings.ALLOWED_ORIGINS else [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+        "https://elfareedcoffee.lovable.app",
+        "https://elfreedcoffee.vercel.app"
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins if settings.ENVIRONMENT == "production" and settings.ALLOWED_ORIGINS else ["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next):

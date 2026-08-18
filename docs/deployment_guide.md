@@ -12,11 +12,13 @@ Ensure the following environment variables are set securely in your production e
 - `ALLOWED_ORIGINS`: JSON array of frontend origins allowed to access the API (e.g., `["https://www.yourdomain.com", "https://admin.yourdomain.com"]`).
 
 **Supabase Configuration:**
+
 - `SUPABASE_URL`: Your Supabase project URL.
 - `SUPABASE_ANON_KEY`: Your Supabase public anonymous key.
 - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key (Backend only, **never** expose this to the frontend).
 
 **Database Configuration:**
+
 - `DATABASE_URL`: Connection string (start with `postgresql://`). Use the IPv4 connection pooler provided by Supabase if deploying on serverless.
 - `DB_POOL_SIZE`: Adjust based on deployment scale (default 5).
 - `DB_MAX_OVERFLOW`: Adjust based on deployment scale (default 10).
@@ -33,22 +35,27 @@ Ensure the following environment variables are set securely in your production e
 Before starting the application server, you must run the database migrations against the production database.
 
 Run this command from the root of the project:
+
 ```bash
 alembic upgrade head
 ```
+
 This applies all unapplied migrations safely.
 
 ## 4. Docker Build Command
 
 To build the production Docker image, run the following command from the root of the project:
+
 ```bash
 docker build -t elfareed-backend:latest .
 ```
+
 This builds a Python 3.14-slim image running under a non-root `appuser`.
 
 ## 5. Docker Run/Deployment Configuration
 
 Run the container using the appropriate environment variables. Assuming your variables are in a securely managed `.env` file (which is excluded from the build via `.dockerignore`):
+
 ```bash
 docker run -d \
   --name elfareed-backend \
@@ -56,7 +63,8 @@ docker run -d \
   --env-file .env \
   elfareed-backend:latest
 ```
-*Note: In production environments like AWS ECS, Kubernetes, or Google Cloud Run, environment variables are typically injected by the orchestrator.*
+
+_Note: In production environments like AWS ECS, Kubernetes, or Google Cloud Run, environment variables are typically injected by the orchestrator._
 
 ## 6. Health-check Endpoints
 
@@ -66,6 +74,7 @@ docker run -d \
 ## 7. CORS Configuration
 
 Wildcard CORS (`*`) is disabled. You must explicitly configure `ALLOWED_ORIGINS` to contain the URLs of your frontends. Example:
+
 ```json
 ["https://store.benelfareed.com", "https://admin.benelfareed.com"]
 ```
@@ -84,5 +93,6 @@ Sensitive information (like Supabase Service Role keys, JWT tokens, and database
 ## 10. Rollback Procedure
 
 If a deployment fails:
+
 1. **Revert the Docker Image:** Deploy the previous known-good Docker image tag.
-2. **Revert Migrations (if applicable):** If the failure was due to a destructive database schema change, run `alembic downgrade <revision_id>` using the previous deployment's codebase before reverting the image. *Note: Forward-only migrations are highly recommended to avoid needing downgrades.*
+2. **Revert Migrations (if applicable):** If the failure was due to a destructive database schema change, run `alembic downgrade <revision_id>` using the previous deployment's codebase before reverting the image. _Note: Forward-only migrations are highly recommended to avoid needing downgrades._

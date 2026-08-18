@@ -117,3 +117,8 @@ def update_product_translations(db: Session, db_obj: Product, obj_in: ProductTra
     db.refresh(db_obj)
     return get_product_by_id(db, db_obj.id)
 
+def delete_product(db: Session, db_obj: Product) -> bool:
+    db.delete(db_obj)
+    db.commit()
+    return True
+

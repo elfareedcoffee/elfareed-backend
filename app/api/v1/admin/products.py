@@ -63,6 +63,14 @@ def deactivate_product(product_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Product not found")
     return crud_product.toggle_product_status(db, p, False)
 
+@router.delete("/{product_id}")
+def delete_product_endpoint(product_id: UUID, db: Session = Depends(get_db)):
+    p = crud_product.get_product_by_id(db, product_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Product not found")
+    crud_product.delete_product(db, p)
+    return {"message": "Product deleted successfully", "id": str(product_id)}
+
 from fastapi import UploadFile, File
 from app.services import storage
 
