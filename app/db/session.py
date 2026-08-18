@@ -13,7 +13,12 @@ if db_url.startswith("postgres://"):
 is_serverless = os.environ.get("VERCEL") == "1" or settings.ENVIRONMENT == "production"
 
 if is_serverless:
-    engine = create_engine(db_url, poolclass=NullPool)
+    engine = create_engine(
+        db_url,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+        connect_args={"connect_timeout": 10}
+    )
 else:
     engine = create_engine(
         db_url,
