@@ -74,8 +74,12 @@ def delete_product_endpoint(product_id: UUID, db: Session = Depends(get_db)):
 from fastapi import UploadFile, File
 from app.services import storage
 
-ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"]
-MAX_FILE_SIZE = 2 * 1024 * 1024 # 2MB
+ALLOWED_MIME_TYPES = {
+    "image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/x-png",
+    "image/webp", "image/gif", "image/svg+xml", "image/avif", "image/heic", "image/heif"
+}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".avif", ".heic", ".heif"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 @router.post("/{product_id}/image", response_model=ProductAdminResponse)
 async def upload_product_image(
@@ -87,22 +91,34 @@ async def upload_product_image(
         p = crud_product.get_product_by_id(db, product_id)
         if not p:
             raise HTTPException(status_code=404, detail="Product not found")
-            
-        if file.content_type not in ALLOWED_MIME_TYPES:
-            raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG, PNG, and WebP are allowed.")
-            
+
+        content_type = (file.content_type or "").lower().split(";")[0].strip()
+        filename = (file.filename or "").lower()
+        import os
+        _, ext = os.path.splitext(filename)
+
+        if content_type not in ALLOWED_MIME_TYPES and ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file type. Only JPEG, PNG, WebP, GIF, SVG, and AVIF images are allowed."
+            )
+
         file_bytes = await file.read()
         if len(file_bytes) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="File size exceeds 2MB limit.")
-            
+            raise HTTPException(status_code=400, detail="File size exceeds 10MB limit.")
+
         old_image_url = p.image_url
-        
+
+        effective_mime = content_type if content_type in ALLOWED_MIME_TYPES else ("image/jpeg" if ext in [".jpg", ".jpeg"] else "image/png")
+
         # 1. Upload the new image first
         try:
-            new_image_url = storage.upload_product_image(file_bytes, file.content_type)
+            new_image_url = storage.upload_product_image(file_bytes, effective_mime)
         except Exception as e:
             # If new upload fails, old image is kept untouched.
-            raise HTTPException(status_code=500, detail="Failed to upload image")
+            import logging
+            logging.getLogger(__name__).error(f"Image upload exception: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
             
         # 2. Verify and commit DB update
         try:
