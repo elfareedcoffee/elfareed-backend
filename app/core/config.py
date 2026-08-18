@@ -38,6 +38,21 @@ class Settings(BaseSettings):
     # Vercel Cron Secret
     CRON_SECRET: Optional[str] = None
 
+    @classmethod
+    def parse_origins(cls, v):
+        if isinstance(v, str):
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+from pydantic import field_validator
+Settings.parse_origins = field_validator("ALLOWED_ORIGINS", mode="before")(Settings.parse_origins)
 
 settings = Settings()

@@ -16,6 +16,9 @@ class AdminVerifyRequest(BaseModel):
 
 class AdminSuccessResponse(BaseModel):
     message: str
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    csrf_token: Optional[str] = None
 
 class AdminMeResponse(BaseModel):
     id: str

@@ -52,8 +52,15 @@ def get_current_supabase_user(request: Request, credentials: HTTPAuthorizationCr
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+from uuid import UUID
+
 def verify_csrf_token(request: Request):
     if request.method in ["POST", "PUT", "PATCH", "DELETE"]:
+        # If request is authenticated via explicit Bearer header, CSRF check is bypassed (no ambient credentials)
+        auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            return
+
         csrf_cookie = request.cookies.get("csrf_token")
         csrf_header = request.headers.get("x-csrf-token")
         
@@ -66,7 +73,12 @@ def get_current_admin_user(
     auth_user_id: str = Depends(get_current_supabase_user),
     _csrf: None = Depends(verify_csrf_token)
 ) -> AdminUser:
-    admin_user = db.query(AdminUser).filter(AdminUser.auth_user_id == auth_user_id).first()
+    try:
+        user_uuid = UUID(str(auth_user_id))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=403, detail="Invalid user ID format")
+
+    admin_user = db.query(AdminUser).filter(AdminUser.auth_user_id == user_uuid).first()
     if not admin_user:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     if not admin_user.is_active:

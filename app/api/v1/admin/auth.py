@@ -84,13 +84,14 @@ def login(
 
     # 3. Set cookies directly (bypassing OTP)
     is_prod = settings.ENVIRONMENT == "production"
+    cookie_samesite = "none" if is_prod else "lax"
     
     response.set_cookie(
         key="admin_access_token",
         value=access_token,
         httponly=True,
         secure=is_prod,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=3600
     )
     response.set_cookie(
@@ -98,7 +99,7 @@ def login(
         value=refresh_token,
         httponly=True,
         secure=is_prod,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=30 * 24 * 3600
     )
     
@@ -108,11 +109,16 @@ def login(
         value=csrf_token,
         httponly=False,
         secure=is_prod,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=3600
     )
 
-    return AdminSuccessResponse(message="Logged in successfully")
+    return AdminSuccessResponse(
+        message="Logged in successfully",
+        access_token=access_token,
+        refresh_token=refresh_token,
+        csrf_token=csrf_token
+    )
 
 @router.post("/verify", response_model=AdminSuccessResponse)
 @limiter.limit("5/minute")
@@ -172,13 +178,14 @@ def verify(
     db.commit()
 
     is_prod = settings.ENVIRONMENT == "production"
+    cookie_samesite = "none" if is_prod else "lax"
     
     response.set_cookie(
         key="admin_access_token",
         value=session_data["access_token"],
         httponly=True,
         secure=is_prod,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=3600 # 1 hour roughly
     )
     response.set_cookie(
@@ -186,7 +193,7 @@ def verify(
         value=session_data["refresh_token"],
         httponly=True,
         secure=is_prod,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=30 * 24 * 3600 # 30 days
     )
     
@@ -196,11 +203,16 @@ def verify(
         value=csrf_token,
         httponly=False,
         secure=is_prod,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=3600
     )
 
-    return AdminSuccessResponse(message="Verified successfully")
+    return AdminSuccessResponse(
+        message="Verified successfully",
+        access_token=session_data["access_token"],
+        refresh_token=session_data["refresh_token"],
+        csrf_token=csrf_token
+    )
 
 @router.get("/me", response_model=AdminMeResponse)
 def get_me(admin_user: AdminUser = Depends(get_current_admin_user)):
@@ -334,9 +346,11 @@ def change_password(
         raise HTTPException(status_code=500, detail="Failed to update password")
 
     # 3. Invalidate current session cookies
-    response.delete_cookie(key="admin_access_token", samesite="lax", secure=settings.ENVIRONMENT == "production")
-    response.delete_cookie(key="admin_refresh_token", samesite="lax", secure=settings.ENVIRONMENT == "production")
-    response.delete_cookie(key="csrf_token", samesite="lax", secure=settings.ENVIRONMENT == "production")
+    is_prod = settings.ENVIRONMENT == "production"
+    cookie_samesite = "none" if is_prod else "lax"
+    response.delete_cookie(key="admin_access_token", samesite=cookie_samesite, secure=is_prod)
+    response.delete_cookie(key="admin_refresh_token", samesite=cookie_samesite, secure=is_prod)
+    response.delete_cookie(key="csrf_token", samesite=cookie_samesite, secure=is_prod)
 
     return AdminSuccessResponse(message="Password changed successfully. Please log in again.")
 
@@ -367,9 +381,11 @@ def logout(
         except Exception as e:
             logger.warning(f"Error during Supabase sign_out: {e}")
             
-    response.delete_cookie(key="admin_access_token", samesite="lax", secure=settings.ENVIRONMENT == "production")
-    response.delete_cookie(key="admin_refresh_token", samesite="lax", secure=settings.ENVIRONMENT == "production")
-    response.delete_cookie(key="csrf_token", samesite="lax", secure=settings.ENVIRONMENT == "production")
+    is_prod = settings.ENVIRONMENT == "production"
+    cookie_samesite = "none" if is_prod else "lax"
+    response.delete_cookie(key="admin_access_token", samesite=cookie_samesite, secure=is_prod)
+    response.delete_cookie(key="admin_refresh_token", samesite=cookie_samesite, secure=is_prod)
+    response.delete_cookie(key="csrf_token", samesite=cookie_samesite, secure=is_prod)
             
     return AdminSuccessResponse(message="Logged out successfully")
 
@@ -381,6 +397,12 @@ def refresh(
     db: Session = Depends(get_db)
 ):
     refresh_token = request.cookies.get("admin_refresh_token")
+    if not refresh_token:
+        # Also check authorization header or body if needed
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            refresh_token = auth_header.split(" ")[1]
+            
     if not refresh_token:
         raise_unauthorized()
     try:
@@ -395,12 +417,14 @@ def refresh(
             raise_unauthorized()
             
         is_prod = settings.ENVIRONMENT == "production"
+        cookie_samesite = "none" if is_prod else "lax"
+        
         response.set_cookie(
             key="admin_access_token",
             value=auth_res.session.access_token,
             httponly=True,
             secure=is_prod,
-            samesite="lax",
+            samesite=cookie_samesite,
             max_age=auth_res.session.expires_in
         )
         response.set_cookie(
@@ -408,7 +432,7 @@ def refresh(
             value=auth_res.session.refresh_token,
             httponly=True,
             secure=is_prod,
-            samesite="lax",
+            samesite=cookie_samesite,
             max_age=30 * 24 * 3600
         )
         
@@ -418,10 +442,15 @@ def refresh(
             value=csrf_token,
             httponly=False,
             secure=is_prod,
-            samesite="lax",
+            samesite=cookie_samesite,
             max_age=auth_res.session.expires_in
         )
-        return AdminSuccessResponse(message="Token refreshed successfully")
+        return AdminSuccessResponse(
+            message="Token refreshed successfully",
+            access_token=auth_res.session.access_token,
+            refresh_token=auth_res.session.refresh_token,
+            csrf_token=csrf_token
+        )
     except Exception as e:
         logger.warning(f"Supabase auth failure during admin refresh: {e}")
         raise_unauthorized()
