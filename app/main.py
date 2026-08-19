@@ -35,17 +35,24 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    cors_origins = settings.ALLOWED_ORIGINS if settings.ALLOWED_ORIGINS else [
+    default_origins = [
+        "https://www.fareedcoffee.com",
+        "https://fareedcoffee.com",
         "http://localhost:5173",
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
         "https://elfareedcoffee.lovable.app",
-        "https://elfreedcoffee.vercel.app"
+        "https://elfreedcoffee.vercel.app",
     ]
+
+    # Combine environment-configured origins with default production and development origins
+    configured_origins = settings.ALLOWED_ORIGINS if settings.ALLOWED_ORIGINS else []
+    allowed_origins = list(dict.fromkeys(configured_origins + default_origins))
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins if settings.ENVIRONMENT == "production" and settings.ALLOWED_ORIGINS else ["*"],
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -61,6 +68,10 @@ def create_app() -> FastAPI:
         return response
 
     add_exception_handlers(app)
+
+    @app.get("/healthz", tags=["health"])
+    def healthz():
+        return {"status": "ok"}
 
     app.include_router(api_router, prefix=settings.API_V1_STR)
 

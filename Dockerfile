@@ -21,7 +21,13 @@ RUN chown -R appuser:appuser /app
 
 USER appuser
 
+ENV PORT=8000
+
 EXPOSE 8000
 
-# Run FastAPI using uvicorn in production mode
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+# Health check using python's built-in urllib
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", 8000)}/api/v1/health')" || exit 1
+
+# Run FastAPI using uvicorn in production mode with dynamic PORT binding
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips '*'"]
