@@ -63,11 +63,11 @@ def get_order_by_id(db: Session, order_id: str | uuid.UUID) -> Order:
 
 
 VALID_TRANSITIONS = {
-    OrderStatusEnum.PENDING: [OrderStatusEnum.CONFIRMED, OrderStatusEnum.CANCELLED],
+    OrderStatusEnum.PENDING: [OrderStatusEnum.CONFIRMED, OrderStatusEnum.PREPARING, OrderStatusEnum.CANCELLED],
     OrderStatusEnum.CONFIRMED: [OrderStatusEnum.PREPARING, OrderStatusEnum.CANCELLED],
-    OrderStatusEnum.PREPARING: [OrderStatusEnum.READY_FOR_DELIVERY, OrderStatusEnum.CANCELLED],
-    OrderStatusEnum.READY_FOR_DELIVERY: [OrderStatusEnum.OUT_FOR_DELIVERY, OrderStatusEnum.CANCELLED],
-    OrderStatusEnum.OUT_FOR_DELIVERY: [OrderStatusEnum.DELIVERED],
+    OrderStatusEnum.PREPARING: [OrderStatusEnum.READY_FOR_DELIVERY, OrderStatusEnum.OUT_FOR_DELIVERY, OrderStatusEnum.DELIVERED, OrderStatusEnum.CANCELLED],
+    OrderStatusEnum.READY_FOR_DELIVERY: [OrderStatusEnum.OUT_FOR_DELIVERY, OrderStatusEnum.DELIVERED, OrderStatusEnum.CANCELLED],
+    OrderStatusEnum.OUT_FOR_DELIVERY: [OrderStatusEnum.DELIVERED, OrderStatusEnum.CANCELLED],
     OrderStatusEnum.DELIVERED: [],
     OrderStatusEnum.CANCELLED: []
 }

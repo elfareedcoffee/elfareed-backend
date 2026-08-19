@@ -98,7 +98,7 @@ def test_upload_image_too_large(mock_admin_auth, mock_crud_product_admin):
     cat_id = uuid.uuid4()
     mock_crud_product_admin.get_product_by_id.return_value = Product(id=prod_id, category_id=cat_id)
     
-    large_data = b"0" * ((2 * 1024 * 1024) + 1)
+    large_data = b"0" * ((10 * 1024 * 1024) + 1)
     
     response = client.post(
         f"/api/v1/admin/products/{prod_id}/image",
