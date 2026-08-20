@@ -93,32 +93,54 @@ def get_order_by_id(db: Session, order_id: str | uuid.UUID) -> Order:
     return order
 
 
-VALID_TRANSITIONS = {
-    OrderStatusEnum.PENDING: [OrderStatusEnum.CONFIRMED, OrderStatusEnum.PREPARING, OrderStatusEnum.CANCELLED],
-    OrderStatusEnum.CONFIRMED: [OrderStatusEnum.PREPARING, OrderStatusEnum.CANCELLED],
-    OrderStatusEnum.PREPARING: [OrderStatusEnum.READY_FOR_DELIVERY, OrderStatusEnum.OUT_FOR_DELIVERY, OrderStatusEnum.DELIVERED, OrderStatusEnum.CANCELLED],
-    OrderStatusEnum.READY_FOR_DELIVERY: [OrderStatusEnum.OUT_FOR_DELIVERY, OrderStatusEnum.DELIVERED, OrderStatusEnum.CANCELLED],
-    OrderStatusEnum.OUT_FOR_DELIVERY: [OrderStatusEnum.DELIVERED, OrderStatusEnum.CANCELLED],
-    OrderStatusEnum.DELIVERED: [],
-    OrderStatusEnum.CANCELLED: []
-}
-
 def update_order_status(db: Session, order_id: str | uuid.UUID, new_status: OrderStatusEnum) -> Order:
-    if new_status == OrderStatusEnum.CANCELLED:
-        # Use existing cancellation logic for transaction-safe stock restoration
-        return cancel_order(db, order_id)
-        
-    order = get_order_by_id(db, order_id)
-    
-    allowed_next_states = VALID_TRANSITIONS.get(order.order_status, [])
-    
-    if new_status not in allowed_next_states:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid status transition from {order.order_status.value} to {new_status.value}"
-        )
-        
-    order.order_status = new_status
-    db.commit()
-    db.refresh(order)
-    return order
+    try:
+        order = db.query(Order).filter(Order.id == uuid.UUID(str(order_id))).with_for_update().first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+            
+        old_status = order.order_status
+        if old_status == new_status:
+            return order
+            
+        # Stock adjustment rules:
+        # If transitioning TO CANCELLED from an active state -> Restore stock
+        if new_status == OrderStatusEnum.CANCELLED and old_status != OrderStatusEnum.CANCELLED:
+            variant_ids = [item.product_variant_id for item in order.items if item.product_variant_id]
+            if variant_ids:
+                variant_ids.sort()
+                locked_variants = db.query(ProductVariant).filter(
+                    ProductVariant.id.in_(variant_ids)
+                ).order_by(ProductVariant.id).with_for_update().all()
+                variant_map = {v.id: v for v in locked_variants}
+                for item in order.items:
+                    if item.product_variant_id and item.product_variant_id in variant_map:
+                        variant_map[item.product_variant_id].stock_quantity += item.quantity
+                        
+        # If transitioning FROM CANCELLED back to an active state -> Deduct stock
+        elif old_status == OrderStatusEnum.CANCELLED and new_status != OrderStatusEnum.CANCELLED:
+            variant_ids = [item.product_variant_id for item in order.items if item.product_variant_id]
+            if variant_ids:
+                variant_ids.sort()
+                locked_variants = db.query(ProductVariant).filter(
+                    ProductVariant.id.in_(variant_ids)
+                ).order_by(ProductVariant.id).with_for_update().all()
+                variant_map = {v.id: v for v in locked_variants}
+                for item in order.items:
+                    if item.product_variant_id and item.product_variant_id in variant_map:
+                        variant_map[item.product_variant_id].stock_quantity = max(0, variant_map[item.product_variant_id].stock_quantity - item.quantity)
+
+        # If status becomes DELIVERED, automatically mark payment as PAID if COD
+        if new_status == OrderStatusEnum.DELIVERED and order.payment_method.value == "COD":
+            order.payment_status = PaymentStatusEnum.PAID
+
+        order.order_status = new_status
+        db.commit()
+        db.refresh(order)
+        return order
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
