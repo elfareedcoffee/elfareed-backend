@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, Enum, DateTime, Integer, ForeignKey
+from sqlalchemy import Column, String, Boolean, Enum, DateTime, Integer, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -34,6 +34,10 @@ class AdminAuthChallenge(Base):
     consumed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    __table_args__ = (
+        Index("ix_admin_auth_challenges_lookup", "admin_user_id", "consumed_at", "expires_at"),
+    )
+
 class AdminPhoneChangeChallenge(Base):
     __tablename__ = "admin_phone_change_challenges"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -45,3 +49,7 @@ class AdminPhoneChangeChallenge(Base):
     max_attempts = Column(Integer, default=3, nullable=False)
     consumed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_admin_phone_change_challenges_lookup", "admin_user_id", "consumed_at", "expires_at"),
+    )

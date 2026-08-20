@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Numeric, Text, ForeignKey, Enum, DateTime, CheckConstraint
+from sqlalchemy import Column, String, Integer, Numeric, Text, ForeignKey, Enum, DateTime, CheckConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -53,6 +53,10 @@ class Order(Base):
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
 
     __table_args__ = (
+        Index("ix_orders_order_status_created_at_desc", "order_status", created_at.desc()),
+        Index("ix_orders_payment_status_created_at_desc", "payment_status", created_at.desc()),
+        Index("ix_orders_customer_phone_created_at_desc", "customer_phone", created_at.desc()),
+        Index("ix_orders_created_at_desc", created_at.desc()),
         CheckConstraint("subtotal >= 0", name="chk_order_subtotal_non_negative"),
         CheckConstraint("delivery_fee >= 0", name="chk_order_delivery_fee_non_negative"),
         CheckConstraint("discount >= 0", name="chk_order_discount_non_negative"),
@@ -63,7 +67,7 @@ class OrderItem(Base):
     __tablename__ = "order_items"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
-    product_variant_id = Column(UUID(as_uuid=True), ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True)
+    product_variant_id = Column(UUID(as_uuid=True), ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True, index=True)
     original_product_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     
     product_name_ar = Column(String, nullable=False)
