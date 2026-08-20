@@ -57,3 +57,11 @@ def cancel_order(
     admin = Depends(get_current_admin_user)
 ):
     return crud_admin_order.cancel_order(db, order_id)
+
+@router.delete("/{order_id}")
+def delete_order_endpoint(
+    order_id: UUID,
+    db: Session = Depends(get_db),
+    admin = Depends(get_current_admin_user)
+):
+    return crud_admin_order.delete_order(db, order_id)

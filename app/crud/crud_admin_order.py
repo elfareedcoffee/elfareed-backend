@@ -6,7 +6,38 @@ from sqlalchemy import or_, and_, desc
 from fastapi import HTTPException
 
 from app.db.models.order import Order, OrderStatusEnum, PaymentStatusEnum
+from app.db.models.product import ProductVariant
 from app.crud.crud_order import cancel_order
+
+def delete_order(db: Session, order_id: str | uuid.UUID) -> dict:
+    try:
+        order = db.query(Order).filter(Order.id == uuid.UUID(str(order_id))).with_for_update().first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # If order was active (not cancelled or delivered), restore stock before deleting
+        if order.order_status not in [OrderStatusEnum.CANCELLED, OrderStatusEnum.DELIVERED]:
+            variant_ids = [item.product_variant_id for item in order.items if item.product_variant_id]
+            if variant_ids:
+                variant_ids.sort()
+                locked_variants = db.query(ProductVariant).filter(
+                    ProductVariant.id.in_(variant_ids)
+                ).order_by(ProductVariant.id).with_for_update().all()
+                variant_map = {v.id: v for v in locked_variants}
+                for item in order.items:
+                    if item.product_variant_id and item.product_variant_id in variant_map:
+                        variant_map[item.product_variant_id].stock_quantity += item.quantity
+        
+        order_num = order.order_number
+        db.delete(order)
+        db.commit()
+        return {"message": "Order deleted successfully", "order_number": order_num, "id": str(order_id)}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 def get_orders_paginated(
     db: Session,
