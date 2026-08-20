@@ -12,7 +12,7 @@ from app.db.models.order import Order
 router = APIRouter()
 
 @router.post("/", response_model=OrderCheckoutResponse)
-@limiter.limit("5/minute")
+@limiter.limit("20/minute")
 def checkout(
     request: Request,
     order_in: OrderCreate,
@@ -20,14 +20,15 @@ def checkout(
     cart_id: str | None = Depends(get_cart_id),
     db: Session = Depends(get_db)
 ):
-    if not cart_id:
-        raise APIException(status_code=400, code="CART_NOT_FOUND")
+    if order_in.items and len(order_in.items) > 0:
+        order = crud_order.create_order_direct(db, order_in)
+    elif cart_id:
+        order = crud_order.create_order_from_cart(db, cart_id, order_in)
+        # Delete the cookie so the frontend knows the cart is gone
+        response.delete_cookie("cart_id")
+    else:
+        raise APIException(status_code=400, code="EMPTY_CART", message="يجب تحديد المنتجات أو توفير سلة صالحة")
         
-    order = crud_order.create_order_from_cart(db, cart_id, order_in)
-    
-    # Delete the cookie so the frontend knows the cart is gone
-    response.delete_cookie("cart_id")
-    
     return order
 
 @router.get("/track/{tracking_token}", response_model=OrderResponse)

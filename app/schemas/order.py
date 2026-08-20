@@ -36,8 +36,12 @@ class OrderBase(BaseModel):
             raise ValueError('Invalid Egyptian phone number format. Must start with +20 followed by 10/11/12/15 and 8 digits.')
         return v
 
+class OrderItemInput(BaseModel):
+    product_variant_id: UUID
+    quantity: int = Field(1, ge=1, le=100)
+
 class OrderCreate(OrderBase):
-    pass
+    items: Optional[List[OrderItemInput]] = None
 
 class OrderResponse(OrderBase):
     id: UUID
